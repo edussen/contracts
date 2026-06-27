@@ -29,7 +29,16 @@
 
 		.doc-card { background: #fff; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,.05); padding: 18px; margin-bottom: 18px; }
 		.doc-meta { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px 16px; border-bottom: 1px solid #f1f1f1; margin-bottom: 16px; font-size: .82rem; color: #6b7280; }
-		.bdg-firmado { background: #d1fae5; color: #059669; padding: 4px 12px; border-radius: 20px; font-weight: 600; font-size: .76rem; }
+		.bdg-estado { padding: 4px 12px; border-radius: 20px; font-weight: 600; font-size: .76rem; }
+		.bdg-estado.verde { background: #d1fae5; color: #059669; }
+		.bdg-estado.amber { background: #fef3c7; color: #92400e; }
+		.bdg-estado.gris { background: #f3f4f6; color: #6b7280; }
+		.bdg-estado.rojo { background: #fee2e2; color: #dc2626; }
+
+		.aviso-info { display: flex; gap: 12px; background: #f4f7fb; border: 1px solid #e0e6ed; border-radius: 10px; padding: 16px 18px; font-size: .88rem; line-height: 1.6; color: #444; margin-bottom: 18px; }
+		.aviso-info.rojo { background: #fef2f2; border-color: #fecaca; color: #7f1d1d; }
+		.aviso-info i { font-size: 1.3rem; color: #197BC2; flex-shrink: 0; margin-top: 2px; }
+		.aviso-info.rojo i { color: #dc2626; }
 
 		.firma-card { background: #fff; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,.05); padding: 30px; }
 		.firma-card h2 { font-size: 1.15rem; color: #197BC2; margin: 0 0 14px; }
@@ -70,7 +79,7 @@
 <body>
 
 	<div class="topbar">
-		<img id="logoEmpresa" src="https://imagenes.numart.com.co/corporate-image/numartIsotypeRed-v3.png" alt="Logo">
+		<img id="logoEmpresa" src="https://imagenes.numart.com.co/corporate-image/numartIsotypePurple-v3.ico" alt="Logo">
 		<span>Firma electrónica de contratos</span>
 	</div>
 
@@ -94,10 +103,15 @@
 
 		<div id="contenidoPrincipal" style="display:none;">
 
+			<div id="avisoInfoEstado" class="aviso-info no-imprimir" style="display:none;">
+				<i class="fa fa-circle-info"></i>
+				<span id="avisoInfoEstadoTexto"></span>
+			</div>
+
 			<div class="doc-card">
 				<div class="doc-meta">
 					<span id="metaEmpleado"></span>
-					<span id="bdgEstadoDoc" class="bdg-firmado" style="display:none;">Firmado</span>
+					<span id="bdgEstadoDoc" class="bdg-estado verde" style="display:none;">Firmado</span>
 				</div>
 				<div id="documentoContrato"></div>
 			</div>
@@ -135,6 +149,9 @@
 				</label>
 
 				<button type="button" class="btn-firmar" id="btnFirmarContrato" disabled onclick="firmarContrato()">Firmar contrato</button>
+				<div style="text-align:center;margin-top:14px;">
+					<button type="button" class="btn-firma-mini" style="border-color:#fecaca;color:#dc2626;" onclick="abrirRechazo()">Rechazar contrato</button>
+				</div>
 			</div>
 
 		</div>
@@ -256,6 +273,72 @@
 			}
 		}
 
+		const MOTIVOS_RECHAZO = [
+			'No estoy de acuerdo con el salario',
+			'No estoy de acuerdo con el horario',
+			'No estoy de acuerdo con alguna cláusula del contrato',
+			'Recibí otra oferta laboral',
+			'Cambié de opinión',
+			'Necesito que se realicen algunos ajustes antes de firmar',
+			'Otro motivo'
+		];
+
+		function abrirRechazo() {
+			SmartlyAlert.fire({
+				title: '¿Está seguro de que desea rechazar este contrato?',
+				text: 'Esta acción quedará registrada y será notificada a la empresa.',
+				icon: 'warning',
+				showCancelButton: true,
+				confirmButtonText: 'Sí, continuar',
+				cancelButtonText: 'Cancelar'
+			}).then(result => {
+				if (result.isConfirmed) abrirMotivoRechazo();
+			});
+		}
+
+		function abrirMotivoRechazo() {
+			const opcionesHtml = MOTIVOS_RECHAZO.map((m, i) =>
+				`<label style="display:block;text-align:left;margin-bottom:8px;font-size:.9rem;">
+					<input type="radio" name="motivoRechazo" value="${m}" ${i === 0 ? 'checked' : ''}> ${m}
+				</label>`).join('');
+
+			SmartlyAlert.fire({
+				title: 'Cuéntanos el motivo',
+				html: `<div style="text-align:left;">${opcionesHtml}
+					<textarea id="comentarioRechazo" placeholder="Cuéntanos más información para la empresa (opcional, obligatorio en 'Otro motivo')" style="width:100%;margin-top:10px;border:1px solid #e0e6ed;border-radius:8px;padding:10px;font-family:inherit;font-size:.85rem;box-sizing:border-box;" rows="3"></textarea>
+				</div>`,
+				showCancelButton: true,
+				confirmButtonText: 'Rechazar contrato',
+				cancelButtonText: 'Cancelar',
+				showLoaderOnConfirm: true,
+				preConfirm: async () => {
+					const motivo = document.querySelector('input[name="motivoRechazo"]:checked')?.value;
+					const comentario = (document.getElementById('comentarioRechazo')?.value || '').trim();
+					if (!motivo) throw new Error('Selecciona un motivo.');
+					if (motivo === 'Otro motivo' && !comentario) throw new Error("Describe tu motivo en el cuadro de texto.");
+					return { motivo, comentario };
+				}
+			}).then(result => {
+				if (result.isConfirmed) enviarRechazo(result.value.motivo, result.value.comentario);
+			});
+		}
+
+		async function enviarRechazo(motivo, comentario) {
+			const data = await apiPost('/contracts/public/reject', { token: tokenFirma, motivo, comentario, userAgent: navigator.userAgent });
+			if (data.ok) {
+				SmartlyAlert.fire({ icon: 'success', title: 'Contrato rechazado', text: `Caso ${data.numeroCaso}. Hemos notificado a la empresa; recibirás novedades por correo.` })
+					.then(() => location.reload());
+			} else {
+				SmartlyAlert.fire({ icon: 'error', title: 'No se pudo rechazar', text: data.error || 'Intenta nuevamente.' });
+			}
+		}
+
+		const ESTADO_NO_FIRMABLE = {
+			expirado: { clase: 'gris', texto: 'Expirado', icono: 'fa-clock', mensaje: c => `Este contrato expiró sin ser firmado dentro del plazo permitido. Si crees que esto es un error, comunícate con la empresa.` },
+			rechazado: { clase: 'rojo', texto: 'Rechazado', icono: 'fa-circle-xmark', mensaje: c => `Rechazaste este contrato (caso ${c.rechazo?.numeroCaso || ''}). ${c.tieneNuevaVersion ? 'La empresa generó una nueva versión; revisa tu correo para el nuevo enlace de firma.' : 'Estamos esperando la respuesta de la empresa; te notificaremos por correo.'}` },
+			anulado: { clase: 'gris', texto: 'Anulado', icono: 'fa-ban', mensaje: c => `Este contrato fue anulado por la empresa y no producirá efectos.${c.respuestaEmpresa?.mensaje ? ' Mensaje de la empresa: ' + c.respuestaEmpresa.mensaje : ''}` }
+		};
+
 		window.addEventListener('load', async () => {
 			tokenFirma = new URLSearchParams(window.location.search).get('token') || '';
 			if (!tokenFirma) { mostrarSolo('estadoError'); return; }
@@ -271,9 +354,25 @@
 			document.getElementById('metaEmpleado').textContent = `${data.contrato.tipoContratoNombre || 'Contrato'} — ${data.contrato.empleadoNombre}`;
 			document.getElementById('documentoContrato').innerHTML = data.contrato.htmlGenerado;
 
-			if (data.contrato.estado === 'firmado') {
-				document.getElementById('bdgEstadoDoc').style.display = 'inline-block';
+			const estado = data.contrato.estado;
+			if (estado === 'firmado') {
+				const bdg = document.getElementById('bdgEstadoDoc');
+				bdg.className = 'bdg-estado verde'; bdg.textContent = 'Firmado'; bdg.style.display = 'inline-block';
 				document.getElementById('bloqueFirma').style.display = 'none';
+				mostrarSolo('contenidoPrincipal');
+				return;
+			}
+
+			if (ESTADO_NO_FIRMABLE[estado]) {
+				const info = ESTADO_NO_FIRMABLE[estado];
+				const bdg = document.getElementById('bdgEstadoDoc');
+				bdg.className = `bdg-estado ${info.clase}`; bdg.textContent = info.texto; bdg.style.display = 'inline-block';
+				document.getElementById('bloqueFirma').style.display = 'none';
+				const aviso = document.getElementById('avisoInfoEstado');
+				aviso.style.display = 'flex';
+				aviso.className = `aviso-info no-imprimir ${info.clase === 'rojo' ? 'rojo' : ''}`;
+				aviso.querySelector('i').className = `fa ${info.icono}`;
+				document.getElementById('avisoInfoEstadoTexto').textContent = info.mensaje(data.contrato);
 				mostrarSolo('contenidoPrincipal');
 				return;
 			}
