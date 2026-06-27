@@ -160,6 +160,10 @@
 
 	<script src="/files/vendor/sweetalert2/dist/sweetalert2.min.js"></script>
 	<link href="/files/css/SmartlyAlert.css" rel="stylesheet">
+	<script type="module">
+		import { SmartlyAlert } from '/files/js/numart/SmartlyAlert.js';
+		window.SmartlyAlert = SmartlyAlert;
+	</script>
 
 	<script>
 		let tokenFirma = '';
